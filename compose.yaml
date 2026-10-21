@@ -5,6 +5,7 @@ services:
       - "8000:8000"
     environment:
       CACHE_TRANSFORMER_DELAY_SECONDS: "0.2"
+      CACHE_TTL_SECONDS: "86400"
     volumes:
       # Keeps the cache across container restarts and rebuilds.
       - cache-data:/data

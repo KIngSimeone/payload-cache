@@ -72,6 +72,14 @@ at three levels:
 3. **Duplicates within a request**: strings are de-duplicated before
    transforming, so `["a", "a"]` costs one call.
 
+Cached results expire after a TTL (`CACHE_TTL_SECONDS`, default one day).
+Choose it based on how long the transformed data stays valid. A
+deterministic transformer never goes stale (`none` disables expiry), while an
+external service whose answers change needs a TTL no longer than the
+staleness you can accept. Expired strings are transformed again on their next
+use. An expired payload keeps its identifier, and its output is regenerated
+on the next `POST` with the same input.
+
 Both tables have unique keys (`input_hash`, `source`) and inserts use
 `ON CONFLICT DO NOTHING`. If two identical requests race, both get the same
 identifier and neither fails.
@@ -113,6 +121,7 @@ The service reads environment variables:
 |----------|---------|---------|
 | `CACHE_DATABASE_URL` | `sqlite:///./cache.db` (`/data/cache.db` in Docker) | SQLAlchemy database URL |
 | `CACHE_TRANSFORMER_DELAY_SECONDS` | `0.2` | Simulated latency per transformer call |
+| `CACHE_TTL_SECONDS` | `86400` | How long cached results stay valid; `none` never expires |
 
 ## Project layout
 
@@ -163,9 +172,17 @@ uv run mypy src tests
   to PostgreSQL means switching that import to `sqlalchemy.dialects.postgresql`
   (same `on_conflict_do_nothing` API) and adding a driver.
 - **`create_all` instead of migrations.** Acceptable for two tables. A real
-  deployment would use Alembic.
-- **No cache eviction.** Cached strings are kept forever, which suits a
-  deterministic transformer. A real one might need TTLs or invalidation.
+  deployment would use Alembic. It also cannot add columns to an existing
+  database, so after a schema change, delete `cache.db` or run
+  `docker compose down -v`.
+- **TTL expiry, not deletion.** Expired rows stay in the database and are
+  overwritten when next used. Nothing removes entries that are never
+  requested again; a periodic cleanup job would handle that if storage
+  mattered.
+- **`GET` may return an expired payload.** Only the input hash is stored, not
+  the input lists, so the service cannot rebuild a payload on read. It is
+  refreshed on the next `POST` with the same input. Storing the inputs would
+  allow refreshing on `GET` as well.
 - **`-h` means `--host`.** The spec assigns `-h` to both `--host` and `--help`.
   Host wins, and help is available as `--help` only.
 - **Output separator.** The output joins with `", "` as specified, so a string
