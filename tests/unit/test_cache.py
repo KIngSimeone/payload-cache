@@ -1,5 +1,8 @@
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
+from sqlalchemy import Engine
 from sqlmodel import Session, select
 
 from payload_cache.service.cache import PayloadService
@@ -66,3 +69,26 @@ def test_get_payload_returns_none_for_unknown_id(
     session: Session, transformer: SpyTransformer
 ) -> None:
     assert PayloadService(session, transformer).get_payload(uuid.uuid4()) is None
+
+
+def test_concurrent_identical_requests_share_one_identifier(engine: Engine) -> None:
+    # Every worker passes the "not found" check before any of them inserts, so
+    # all of them reach the insert; only the conflict handling keeps them in sync.
+    workers = 8
+    barrier = threading.Barrier(workers)
+
+    def transform_after_barrier(value: str) -> str:
+        barrier.wait()
+        return value.upper()
+
+    def create() -> uuid.UUID:
+        with Session(engine) as session:
+            payload, _ = PayloadService(session, transform_after_barrier).create_payload(
+                ["a"], ["a"]
+            )
+            return payload.id
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        ids = list(pool.map(lambda _: create(), range(workers)))
+
+    assert len(set(ids)) == 1
