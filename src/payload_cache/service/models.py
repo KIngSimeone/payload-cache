@@ -4,6 +4,10 @@ from datetime import UTC, datetime
 from sqlmodel import Field, SQLModel
 
 
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 class TransformedString(SQLModel, table=True):
     """Cached result of one transformer call, keyed by its input string.
 
@@ -15,6 +19,8 @@ class TransformedString(SQLModel, table=True):
 
     source: str = Field(primary_key=True)
     result: str
+    # When the transformer produced ``result``; drives TTL expiry.
+    cached_at: datetime = Field(default_factory=utcnow)
 
 
 class Payload(SQLModel, table=True):
@@ -27,4 +33,7 @@ class Payload(SQLModel, table=True):
     # identifier per distinct input, even under concurrent requests.
     input_hash: str = Field(unique=True, max_length=64)
     output: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=utcnow)
+    # When ``output`` was last built. It can be newer than ``created_at``: once
+    # the TTL passes, the output is regenerated under the same identifier.
+    generated_at: datetime = Field(default_factory=utcnow)

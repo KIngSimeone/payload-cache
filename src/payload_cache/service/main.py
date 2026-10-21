@@ -28,5 +28,6 @@ def create_app(settings: Settings | None = None, transformer: Transformer | None
     app = FastAPI(title="Payload cache", version="0.1.0", lifespan=lifespan)
     app.state.engine = engine
     app.state.transformer = transformer or make_transformer(settings.transformer_delay_seconds)
+    app.state.cache_ttl = settings.ttl
     app.include_router(router)
     return app

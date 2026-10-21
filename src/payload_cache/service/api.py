@@ -19,7 +19,7 @@ def get_session(request: Request) -> Iterator[Session]:
 def get_payload_service(
     request: Request, session: Annotated[Session, Depends(get_session)]
 ) -> PayloadService:
-    return PayloadService(session, request.app.state.transformer)
+    return PayloadService(session, request.app.state.transformer, ttl=request.app.state.cache_ttl)
 
 
 ServiceDep = Annotated[PayloadService, Depends(get_payload_service)]
