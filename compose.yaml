@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      CACHE_TRANSFORMER_DELAY_SECONDS: "0.2"
+    volumes:
+      # Keeps the cache across container restarts and rebuilds.
+      - cache-data:/data
+
+volumes:
+  cache-data:
